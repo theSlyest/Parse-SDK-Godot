@@ -3,6 +3,7 @@
 .nomedia
 
 # Godot-specific ignores
+*.uid
 .import/
 export.cfg
 export_credentials.cfg
