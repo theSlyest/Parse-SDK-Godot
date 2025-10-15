@@ -13,4 +13,3 @@ func get(key: StringName) -> Variant:
 		return value
 	assert(server_data.has(key), "The column {key} does not exist.")
 	return server_data.get(key)
-

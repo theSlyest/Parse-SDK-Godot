@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3 uid="uid://b2cpx1weaw80l"]
+
+[ext_resource type="Script" uid="uid://b0hggl2ewvn0i" path="res://addons/parse-sdk/parse/parse.gd" id="1_111vj"]
+
+[node name="Parse" type="Node2D"]
+script = ExtResource("1_111vj")
+
+[node name="HTTPRequest" type="HTTPRequest" parent="."]
