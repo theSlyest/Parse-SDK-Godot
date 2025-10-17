@@ -1,39 +1,34 @@
-class_name ParseTask
+class_name HTTPRequestTask
 
 ## Emitted when a request is completed. The request can be successful or not successful: if not, an [code]error[/code] Dictionary will be passed as a result.
 ## @arg-types Variant
 signal task_finished()
 
-enum Task {
-	TASK_GET,       ## A GET Request Task, processing a get() request
-	TASK_POST,      ## A POST Request Task, processing add() request
-	TASK_PUT,     ## A PATCH Request Task, processing a update() request
-	TASK_DELETE    ## A DELETE Request Task, processing a delete() request
+## Mapping of Methods enum values to descriptions for use in printing user-friendly error codes.
+const METHOD_MAP = {
+	HTTPClient.METHOD_GET: "GET",
+	HTTPClient.METHOD_POST: "CREATE",
+	HTTPClient.METHOD_PUT: "UPDATE",
+	HTTPClient.METHOD_DELETE: "DELETE"
 }
-
-## Mapping of Task enum values to descriptions for use in printing user-friendly error codes.
-const TASK_MAP = {
-	Task.TASK_GET: "GET DOCUMENT",
-	Task.TASK_POST: "ADD DOCUMENT",
-	Task.TASK_PUT: "UPDATE DOCUMENT",
-	Task.TASK_DELETE: "DELETE DOCUMENT",
-}
-
-## The code indicating the HTTP request is processing.
-## @setter set_action
-var action : int = -1 : set = set_action
 
 ## A variable, temporary holding the result of the request.
 var data
 var error: Dictionary
 
+## The code indicating the HTTP request is processing.
+var _method : HTTPClient.Method = HTTPClient.METHOD_GET
+
 var _response_headers: PackedStringArray = PackedStringArray()
 var _response_code: int = 0
 
-var _method: int = -1
 var _url: String = ""
 var _fields: String = ""
 var _headers: PackedStringArray = []
+
+
+func _init(url: StringName, method: HTTPClient.Method, body: Dictionary) -> void:
+	pass
 
 func _on_request_completed(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray) -> void:
 	var bod = body.get_string_from_utf8()
@@ -43,23 +38,23 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 	var failed: bool = bod is Dictionary and bod.has("error") and response_code != HTTPClient.RESPONSE_OK
 	# Probably going to regret this...
 	if response_code == HTTPClient.RESPONSE_OK or response_code == HTTPClient.RESPONSE_CREATED:
-		match action:
-			Task.TASK_POST, Task.TASK_GET, Task.TASK_PUT:
-				document = FirestoreDocument.new(bod)
-				data = document
-			Task.TASK_DELETE:
+		match _method:
+			HTTPClient.METHOD_POST, HTTPClient.METHOD_GET, HTTPClient.METHOD_PUT:
+				pass
+			HTTPClient.METHOD_DELETE:
 				data = true
 	else:
 		var description = ""
-		if TASK_MAP.has(action):
-			description = "(" + TASK_MAP[action] + ")"
+		if METHOD_MAP.has(_method):
+			description = "(" + METHOD_MAP[_method] + ")"
 
-		Parse._printerr("Action in error was: " + str(action) + " " + description)
-		build_error(bod, action, description)
+		Parse._printerr("method in error was: " + str(_method) + " " + description)
+		build_error(bod, _method, description)
 	
 	task_finished.emit()
-		
-func build_error(_error, action, description) -> void:
+
+
+func build_error(_error, method, description) -> void:
 	if _error:
 		if _error is Array and _error.size() > 0 and _error[0].has("error"):
 			_error = _error[0].error
@@ -72,25 +67,11 @@ func build_error(_error, action, description) -> void:
 		error = { "error": {
 				 "code": 0,
 				 "status": "Unknown Error",
-				 "message": "Error: %s - %s" % [action, description]
+				 "message": "Error: %s - %s" % [method, description]
 			}
 		}
 	
 	data = null
-
-func set_action(value : int) -> void:
-	action = value
-	match action:
-		Task.TASK_GET:
-			_method = HTTPClient.METHOD_GET
-		Task.TASK_POST:
-			_method = HTTPClient.METHOD_POST
-		Task.TASK_PUT:
-			_method = HTTPClient.METHOD_PATCH
-		Task.TASK_DELETE:
-			_method = HTTPClient.METHOD_DELETE
-		_:
-			assert(false)
 
 
 func _merge_dict(dic_a : Dictionary, dic_b : Dictionary, nullify := false) -> Dictionary:
@@ -127,3 +108,19 @@ func _merge_array(arr_a : Array, arr_b : Array, nullify := false) -> Array:
 		else:
 			ret[index] = val
 	return ret
+
+
+func run() -> void:
+	#_headers = PackedStringArray([_AUTHORIZATION_HEADER + auth.idtoken])
+
+	var	http_request = HTTPRequest.new()
+	http_request.timeout = 5
+	Utilities.fix_http_request(http_request)
+	Parse.add_child(http_request)
+	http_request.request_completed.connect(
+		func(result, response_code, headers, body): 
+			_on_request_completed(result, response_code, headers, body)
+			http_request.queue_free()
+	)
+	
+	http_request.request(_url, _headers, _method, _fields)
